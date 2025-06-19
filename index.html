@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Photo Sharing App</title>
+    <script src="https://unpkg.com/aws-amplify@5.x.x/dist/aws-amplify.min.js"></script>
+    <style>
+        #gallery img { margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Upload an Image</h1>
+    <input type="file" id="uploadFile" accept="image/*">
+    <button onclick="uploadImage()">Upload</button>
+    <h2>Gallery</h2>
+    <div id="gallery"></div>
+
+    <script>
+    // Configure Amplify
+    Amplify.configure({
+        API: {
+            endpoints: [
+                {
+                    name: 'PhotoSharingAPI',
+                    endpoint: 'https://your-api-id.execute-api.us-east-1.amazonaws.com/prod'
+                }
+            ]
+        }
+    });
+
+    async function uploadImage() {
+        const fileInput = document.getElementById("uploadFile");
+        const file = fileInput.files[0];
+        if (!file) {
+            alert("Please select an image file.");
+            return;
+        }
+
+        const fileName = encodeURIComponent(file.name);
+        try {
+            // Fetch pre-signed URL from Amplify API
+            const response = await Amplify.API.get('PhotoSharingAPI', '/presigned-url', {
+                queryStringParameters: { fileName }
+            });
+
+            // Upload file to S3 using pre-signed URL
+            const uploadResponse = await fetch(response.url, {
+                method: "PUT",
+                body: file,
+                headers: { "Content-Type": file.type }
+            });
+
+            if (uploadResponse.ok) {
+                alert("Uploaded successfully!");
+                displayImages();
+            } else {
+                alert("Upload failed.");
+            }
+        } catch (error) {
+            console.error("Error uploading image:", error);
+            alert("Error uploading image.");
+        }
+    }
+
+    async function displayImages() {
+        const gallery = document.getElementById("gallery");
+        gallery.innerHTML = "";
+
+        try {
+            // Fetch list of thumbnails from Amplify API
+            const thumbnails = await Amplify.API.get('PhotoSharingAPI', '/list-thumbnails');
+            thumbnails.forEach(key => {
+                const imageUrl = `https://photo-sharing-thumbnails.s3.amazonaws.com/${key}`;
+                const imgElement = `<img src="${imageUrl}" width="150" height="150">`;
+                gallery.innerHTML += imgElement;
+            });
+        } catch (error) {
+            console.error("Error fetching thumbnails:", error);
+            gallery.innerHTML = "<p>Error loading thumbnails.</p>";
+        }
+    }
+
+    // Load thumbnails on page load
+    displayImages();
+    </script>
+</body>
+</html>
